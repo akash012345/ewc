@@ -28,9 +28,9 @@ class Agent():
         self.exploration_rate   = 1.0
         self.exploration_min    = 0.001
         self.exploration_decay  = 0.995
-        self.n_hidden1 			= 70
-        self.n_hidden2			= 60
-        self.lam				= 15
+        self.n_hidden1 			= 100
+        self.n_hidden2			= 90
+        self.lam				= 30
 
         self.x = tf.placeholder(tf.float32, [None, state_size], name='features')
         self.target = tf.placeholder(tf.float32, [None, action_size], name='output')
@@ -71,6 +71,7 @@ class Agent():
         for v in range(len(self.var_list)):
             ewc_penalty += (self.lam/2) * tf.reduce_sum(tf.multiply(self.F_accum[v].astype(np.float32),tf.square(self.var_list[v] - self.star_vars[v])))
         self.loss = tf.losses.mean_squared_error(self.target, self.y) + ewc_penalty
+        self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss)
 
     def star(self):
         # used for saving optimal weights after most recent task training
@@ -117,16 +118,17 @@ class Agent():
         probs = tf.nn.softmax(self.y)
         class_ind = tf.to_int32(tf.multinomial(tf.log(probs), 1)[0][0])
         print('a')
-        sample_batch = random.sample(self.memory, sample_batch_size)
-        for state, action, reward, next_state, done in sample_batch:
-            # compute first-order derivatives
-            ders = self.sess.run(tf.gradients(tf.log(probs[0,class_ind]), self.var_list), feed_dict={self.x: state})           
-            # square the derivatives and add to total
+        for i in range(sample_batch_size):
+            sample_batch = random.sample(self.memory, sample_batch_size)
+            for state, action, reward, next_state, done in sample_batch:
+                # compute first-order derivatives
+                ders = self.sess.run(tf.gradients(tf.log(probs[0,class_ind]), self.var_list), feed_dict={self.x: state})           
+                # square the derivatives and add to total
+                for v in range(len(self.F_accum)):
+                    self.F_accum[v] += np.square(ders[v])
+            # divide totals by number of sampless 
             for v in range(len(self.F_accum)):
-                self.F_accum[v] += np.square(ders[v])
-        # divide totals by number of sampless 
-        for v in range(len(self.F_accum)):
-            self.F_accum[v] /= sample_batch_size
+                self.F_accum[v] /= sample_batch_size
 
 
 
@@ -139,18 +141,14 @@ class CartPole:
         #enviornment 2 runs first
         self.env1              = gym.make('Pendulum-v0')
         self.env2              = gym.make('CartPole-v0')
-        self.env1_input=self.env1.observation_space.shape[0]
-        self.env2_input=self.env2.observation_space.shape[0]
-        self.input_size=max(self.env2_input,self.env1_input)
-        self.env1_output=self.env1.action_space.n
-        self.env2_output=self.env2.action_space.n
-        self.output_size=max(self.env1_output,self.env2_output)
+        self.env1_input        = self.env1.observation_space.shape[0]
+        self.env2_input        = self.env2.observation_space.shape[0]
+        self.input_size        = max(self.env2_input,self.env1_input)
+        self.env1_output       = self.env1.action_space.n
+        self.env2_output       = self.env2.action_space.n
+        self.output_size       = max(self.env1_output,self.env2_output)
         self.agent             = Agent(self.input_size, self.output_size)
         
-
-
-
-
 
     def run(self):
         try:
@@ -215,8 +213,7 @@ class CartPole:
             # train second task
 
             self.agent.exploration_rate = 1
-            
-            
+                        
             for index_episode in range(50):
                 state = self.env1.reset()
                 N=self.input_size-self.env1.observation_space.shape[0]
