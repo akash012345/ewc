@@ -33,6 +33,7 @@ class Agent():
         self.lam				= 15
         self.sess               = tf.InteractiveSession()
 
+
         self.x = tf.placeholder(tf.float32, [None, state_size], name='features')
         self.target = tf.placeholder(tf.float32, [None, action_size], name='output')
     	
@@ -147,22 +148,21 @@ class Agent():
         probs = tf.nn.softmax(self.y)
         class_ind = tf.to_int32(tf.multinomial(tf.log(probs), 1)[0][0])
         print('a')
-        for i in range(sample_batch_size):
-            sample_batch = random.sample(self.memory, sample_batch_size)
-            for state, action, reward, next_state, done in sample_batch:
-                # compute first-order derivatives
-                ders = self.sess.run(tf.gradients(tf.log(probs[0,class_ind]), self.var_list), feed_dict={self.x: state})           
-                # square the derivatives and add to total
-                for v in range(len(self.F_accum)):
-                    self.F_accum[v] += np.square(ders[v])
-            # divide totals by number of sampless 
+        sample_batch = random.sample(self.memory, sample_batch_size)
+        for state, action, reward, next_state, done in sample_batch:
+            # compute first-order derivatives
+            ders = self.sess.run(tf.gradients(tf.log(probs[0,class_ind]), self.var_list), feed_dict={self.x: state})           
+            # square the derivatives and add to total
             for v in range(len(self.F_accum)):
-                self.F_accum[v] /= sample_batch_size
+                self.F_accum[v] += np.square(ders[v])
+        # divide totals by number of sampless 
+        for v in range(len(self.F_accum)):
+            self.F_accum[v] /= sample_batch_size
 
 
 
 
-class CartPole:
+class Game:
     def __init__(self):
         self.sample_batch_size = 100
         self.episodes          = 150
@@ -178,6 +178,7 @@ class CartPole:
         self.env2_output       = self.env2.action_space.n
         self.output_size       = max(self.env1_output,self.env2_output)
         self.agent             = Agent(self.input_size, self.output_size)
+        self.render_activate    = False
         
 
     def run(self):
@@ -192,7 +193,8 @@ class CartPole:
                 index = 0
                 rew = 0
                 while not done:
-                    self.env2.render()
+                    if self.render_activate:
+                        self.env2.render()
 
                     action = self.agent.act(state, self.env2.action_space.n)
 
@@ -226,7 +228,8 @@ class CartPole:
                 index = 0
                 rew = 0
                 while not done:
-                    self.env2.render()
+                    if self.render_activate:
+                        self.env2.render()
                     action = self.agent.act(state, self.env2.action_space.n)
                     next_state, reward, done, _ = self.env2.step(action)
                     next_state = np.pad(np.array(next_state), (0, N), 'constant')
@@ -257,7 +260,8 @@ class CartPole:
                 index = 0
                 rew = 0
                 while not done:
-                    self.env1.render()
+                    if self.render_activate:
+                        self.env1.render()
 
                     action = self.agent.act(state, self.env1.action_space.n)
 
@@ -288,7 +292,8 @@ class CartPole:
                 index = 0
                 rew = 0
                 while not done:
-                    self.env2.render()
+                    if self.render_activate:
+                        self.env2.render()
                     action = self.agent.act(state, self.env2.action_space.n)
                     next_state, reward, done, _ = self.env2.step(action)
                     next_state = np.pad(np.array(next_state), (0, N), 'constant')
@@ -309,5 +314,5 @@ class CartPole:
             self.agent.save_model()
 
 if __name__ == "__main__":
-    cartpole = CartPole()
-    cartpole.run()
+    game = Game()
+    game.run()
