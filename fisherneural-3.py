@@ -53,6 +53,8 @@ class Agent():
         self.var_list = [w1, b1, w2, b2, w3, b3]
 
         self.loss = tf.losses.mean_squared_error(self.target, self.y)
+        for v in range(len(self.var_list)):
+            self.loss += (self.lam/2) * tf.reduce_sum(tf.multiply(self.F_accum[v].astype(np.float32),tf.square(self.var_list[v] - self.star_vars[v])))
         self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss)
         self.sess = tf.InteractiveSession()
         self.sess.run(tf.global_variables_initializer())
@@ -63,15 +65,16 @@ class Agent():
     def predict(self, state):
         return self.sess.run(self.y, feed_dict={self.x : state})
 
-    def train(self, state, target, ewc = False):
+    def train(self, state, target, lam):
+        self.lam = lam
         self.sess.run(self.train_step, feed_dict={self.x : state, self.target : target})
     	
-    def update_ewc_penalty(self):
-        ewc_penalty = 0
-        for v in range(len(self.var_list)):
-            ewc_penalty += (self.lam/2) * tf.reduce_sum(tf.multiply(self.F_accum[v].astype(np.float32),tf.square(self.var_list[v] - self.star_vars[v])))
-        self.loss = tf.losses.mean_squared_error(self.target, self.y) + ewc_penalty
-        self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss)
+    # def update_ewc_penalty(self):
+    #     ewc_penalty = 0
+    #     for v in range(len(self.var_list)):
+    #         ewc_penalty += (self.lam/2) * tf.reduce_sum(tf.multiply(self.F_accum[v].astype(np.float32),tf.square(self.var_list[v] - self.star_vars[v])))
+    #     self.loss = tf.losses.mean_squared_error(self.target, self.y) + ewc_penalty
+    #     self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss)
 
     def star(self):
         # used for saving optimal weights after most recent task training
@@ -94,7 +97,7 @@ class Agent():
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
 
-    def replay(self, sample_batch_size, ewc = False):
+    def replay(self, sample_batch_size, lam = 0):
         if len(self.memory) < sample_batch_size:
             return
         sample_batch = random.sample(self.memory, sample_batch_size)
@@ -104,7 +107,7 @@ class Agent():
               target = reward + self.gamma * np.amax(self.predict(next_state)[0])
             target_f = self.predict(state)
             target_f[0][action] = target
-            self.train(state, target_f, ewc)
+            self.train(state, target_f, lam)
         if self.exploration_rate > self.exploration_min:
             self.exploration_rate *= self.exploration_decay
 
@@ -138,8 +141,9 @@ class CartPole:
         self.sample_batch_size = 100
         self.episodes          = 200
         self.testno			   = 10
+        self.fisher_sample_size = 20
         #enviornment 2 runs first
-        self.env1              = gym.make('Pendulum-v0')
+        self.env1              = gym.make('Acrobot-v1')
         self.env2              = gym.make('CartPole-v0')
         self.env1_input        = self.env1.observation_space.shape[0]
         self.env2_input        = self.env2.observation_space.shape[0]
@@ -174,13 +178,13 @@ class CartPole:
                     index += 1
                     rew += reward
                 print("Episode {}# Score: {}".format(index_episode, rew))
-                self.agent.replay(self.sample_batch_size, True)
+                self.agent.replay(self.sample_batch_size, 0)
             
 
             # calculate fisher information
             self.agent.star()
-            self.agent.compute_fisher(self.sample_batch_size)
-            self.agent.update_ewc_penalty()  
+            self.agent.compute_fisher(self.fisher_sample_size)
+            # self.agent.update_ewc_penalty()  
 
 
             print("Testing...")
@@ -214,7 +218,7 @@ class CartPole:
 
             self.agent.exploration_rate = 1
                         
-            for index_episode in range(50):
+            for index_episode in range(self.episodes):
                 state = self.env1.reset()
                 N=self.input_size-self.env1.observation_space.shape[0]
                 state = np.pad(np.array(state), (0, N), 'constant')
@@ -236,7 +240,7 @@ class CartPole:
                     index += 1
                     rew += reward
                 print("Episode {}# Score: {}".format(index_episode, rew))
-                self.agent.replay(self.sample_batch_size)
+                self.agent.replay(self.sample_batch_size, 15)
 
             # play first task again
 
