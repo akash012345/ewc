@@ -29,8 +29,8 @@ class Agent():
         self.exploration_min    = 0.001
         self.exploration_decay  = 0.995
         self.n_hidden1 			= 100
-        self.n_hidden2			= 90
-        self.lam				= 15
+        self.n_hidden2			= 100
+        self.lam				= 80
         self.sess               = tf.InteractiveSession()
 
 
@@ -144,10 +144,9 @@ class Agent():
         self.F_accum = []
         for v in range(len(self.var_list)):
             self.F_accum.append(np.zeros(self.var_list[v].get_shape().as_list()))
-            print(self.var_list[v])
         probs = tf.nn.softmax(self.y)
         class_ind = tf.to_int32(tf.multinomial(tf.log(probs), 1)[0][0])
-        print('a')
+
         sample_batch = random.sample(self.memory, sample_batch_size)
         for state, action, reward, next_state, done in sample_batch:
             # compute first-order derivatives
@@ -165,9 +164,9 @@ class Agent():
 class Game:
     def __init__(self):
         self.sample_batch_size = 100
-        self.episodes          = 150
+        self.episodes          = 300
         self.testno			   = 10
-        self.fisher_sample_size = 20
+        self.fisher_sample_size = 100
         #enviornment 2 runs first
         self.env1              = gym.make('Acrobot-v1')
         self.env2              = gym.make('CartPole-v0')
@@ -211,6 +210,7 @@ class Game:
 
             # calculate fisher information
             self.agent.star()
+            print('Computing Fisher')
             self.agent.compute_fisher(self.fisher_sample_size)
             self.agent.update_ewc_penalty()  
             self.agent.restore(self.agent.sess)
@@ -245,7 +245,7 @@ class Game:
 
             # train second task
 
-            # self.agent.restore()
+            
 
             print("Train 2...")
 
