@@ -19,7 +19,7 @@ def bias_variable(shape, name):
 
 class Agent():
     def __init__(self, state_size, action_size):
-        self.save_model_path   = "saved.cpkt"
+        self.save_model_path   = "./my-model.ckpt"
         self.state_size         = state_size
         self.action_size        = action_size
         self.memory             = deque(maxlen=2000)
@@ -60,8 +60,7 @@ class Agent():
         
         self.sess.run(tf.global_variables_initializer())
 
-
-        # self.saver = tf.train.Saver()
+        self.saver = tf.train.Saver()
 
 
 
@@ -95,7 +94,7 @@ class Agent():
 
     def save_model(self):
     	print("model saved")
-    	# self.saver.save(self.sess, self.save_model_path)
+    	self.saver.save(self.sess, self.save_model_path)
 
 
     def act(self, state, action_size):
