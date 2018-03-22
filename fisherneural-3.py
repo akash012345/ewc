@@ -53,47 +53,55 @@ class Agent():
 
         self.var_list = [w1, b1, w2, b2, w3, b3]
 
-        # self.loss = tf.losses.mean_squared_error(self.target, self.y)
+        self.loss = tf.losses.mean_squared_error(self.target, self.y)
         
-        # self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss)
+        self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss)
         
         self.sess.run(tf.global_variables_initializer())
 
-        self.intialize()
+        # self.intialize()
 
-        self.sess.run(tf.global_variables_initializer())
+        # self.sess.run(tf.global_variables_initializer())
 
 
         # self.saver = tf.train.Saver()
 
-    def intialize(self):
-        self.F_accum = []
-        for v in range(len(self.var_list)):
-            self.F_accum.append(np.zeros(self.var_list[v].get_shape().as_list()))
-        self.star_vars = []
-        for v in range(len(self.var_list)):
-            self.star_vars.append(self.var_list[v].eval())
-        ewc_penalty = 0
-        for v in range(len(self.var_list)):
-            ewc_penalty += (self.lam/2) * tf.reduce_sum(tf.multiply(self.F_accum[v].astype(np.float32),tf.square(self.var_list[v] - self.star_vars[v])))
-        self.loss = tf.losses.mean_squared_error(self.target, self.y) + ewc_penalty
-        self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss)
+    # def intialize(self):
+    #     self.F_accum = []
+    #     for v in range(len(self.var_list)):
+    #         self.F_accum.append(np.zeros(self.var_list[v].get_shape().as_list()))
+    #     self.star_vars = []
+    #     for v in range(len(self.var_list)):
+    #         self.star_vars.append(self.var_list[v].eval())
+    #     ewc_penalty = 0
+    #     for v in range(len(self.var_list)):
+    #         ewc_penalty += (self.lam/2) * tf.reduce_sum(tf.multiply(self.F_accum[v].astype(np.float32),tf.square(self.var_list[v] - self.star_vars[v])))
+    #     self.loss = tf.losses.mean_squared_error(self.target, self.y) + ewc_penalty
+    #     self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss)
 
+
+
+    def restore(self, sess):
+        # reassign optimal weights for latest task
+        if hasattr(self, "star_vars"):
+            for v in range(len(self.var_list)):
+                sess.run(self.var_list[v].assign(self.star_vars[v]))
 
 
     def predict(self, state):
         return self.sess.run(self.y, feed_dict={self.x : state})
 
     def train(self, state, target, lam):
-        self.lam = lam
+        # self.lam = lam
         self.sess.run(self.train_step, feed_dict={self.x : state, self.target : target})
     	
-    # def update_ewc_penalty(self):
-    #     ewc_penalty = 0
-    #     for v in range(len(self.var_list)):
-    #         ewc_penalty += (self.lam/2) * tf.reduce_sum(tf.multiply(self.F_accum[v].astype(np.float32),tf.square(self.var_list[v] - self.star_vars[v])))
-    #     self.loss = tf.losses.mean_squared_error(self.target, self.y) + ewc_penalty
-    #     self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss)
+    def update_ewc_penalty(self):
+        self.ewc_loss = self.loss
+        for v in range(len(self.var_list)):
+            self.ewc_loss+= (self.lam/2) * tf.reduce_sum(tf.multiply(self.F_accum[v].astype(np.float32),tf.square(self.var_list[v] - self.star_vars[v])))
+        # self.loss = tf.losses.mean_squared_error(self.target, self.y) + ewc_penalty
+        self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.ewc_loss)
+        self.sess.run(tf.global_variables_initializer())
 
     def star(self):
         # used for saving optimal weights after most recent task training
@@ -132,10 +140,10 @@ class Agent():
     def compute_fisher(self, sample_batch_size):
         if len(self.memory) < sample_batch_size:
             return
-        # self.F_accum = []
-        # for v in range(len(self.var_list)):
-        #     self.F_accum.append(np.zeros(self.var_list[v].get_shape().as_list()))
-            # print(self.var_list[v])
+        self.F_accum = []
+        for v in range(len(self.var_list)):
+            self.F_accum.append(np.zeros(self.var_list[v].get_shape().as_list()))
+            print(self.var_list[v])
         probs = tf.nn.softmax(self.y)
         class_ind = tf.to_int32(tf.multinomial(tf.log(probs), 1)[0][0])
         print('a')
@@ -157,7 +165,7 @@ class Agent():
 class CartPole:
     def __init__(self):
         self.sample_batch_size = 100
-        self.episodes          = 300
+        self.episodes          = 200
         self.testno			   = 10
         self.fisher_sample_size = 20
         #enviornment 2 runs first
@@ -202,8 +210,8 @@ class CartPole:
             # calculate fisher information
             self.agent.star()
             self.agent.compute_fisher(self.fisher_sample_size)
-            # self.agent.update_ewc_penalty()  
-
+            self.agent.update_ewc_penalty()  
+            self.agent.restore(self.agent.sess)
 
             print("Testing...")
             self.agent.exploration_rate = 0
@@ -233,6 +241,10 @@ class CartPole:
             self.avgreward1 = reward1/self.testno
 
             # train second task
+
+            # self.agent.restore()
+
+            print("Train 2...")
 
             self.agent.exploration_rate = 1
                         
