@@ -28,9 +28,9 @@ class Agent():
         self.exploration_rate   = 1.0
         self.exploration_min    = 0.001
         self.exploration_decay  = 0.995
-        self.n_hidden1 			= 100
-        self.n_hidden2			= 100
-        self.lam				= 80
+        self.n_hidden1 			= 50
+        self.n_hidden2			= 40
+        self.lam				= 500
         self.sess               = tf.InteractiveSession()
 
 
@@ -60,25 +60,8 @@ class Agent():
         
         self.sess.run(tf.global_variables_initializer())
 
-        # self.intialize()
-
-        # self.sess.run(tf.global_variables_initializer())
-
 
         # self.saver = tf.train.Saver()
-
-    # def intialize(self):
-    #     self.F_accum = []
-    #     for v in range(len(self.var_list)):
-    #         self.F_accum.append(np.zeros(self.var_list[v].get_shape().as_list()))
-    #     self.star_vars = []
-    #     for v in range(len(self.var_list)):
-    #         self.star_vars.append(self.var_list[v].eval())
-    #     ewc_penalty = 0
-    #     for v in range(len(self.var_list)):
-    #         ewc_penalty += (self.lam/2) * tf.reduce_sum(tf.multiply(self.F_accum[v].astype(np.float32),tf.square(self.var_list[v] - self.star_vars[v])))
-    #     self.loss = tf.losses.mean_squared_error(self.target, self.y) + ewc_penalty
-    #     self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss)
 
 
 
