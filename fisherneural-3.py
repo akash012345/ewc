@@ -31,6 +31,7 @@ class Agent():
         self.n_hidden1 			= 100
         self.n_hidden2			= 90
         self.lam				= 30
+        self.sess               = tf.InteractiveSession()
 
         self.x = tf.placeholder(tf.float32, [None, state_size], name='features')
         self.target = tf.placeholder(tf.float32, [None, action_size], name='output')
@@ -52,14 +53,32 @@ class Agent():
 
         self.var_list = [w1, b1, w2, b2, w3, b3]
 
-        self.loss = tf.losses.mean_squared_error(self.target, self.y)
-        for v in range(len(self.var_list)):
-            self.loss += (self.lam/2) * tf.reduce_sum(tf.multiply(self.F_accum[v].astype(np.float32),tf.square(self.var_list[v] - self.star_vars[v])))
-        self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss)
-        self.sess = tf.InteractiveSession()
+        # self.loss = tf.losses.mean_squared_error(self.target, self.y)
+        
+        # self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss)
+        
         self.sess.run(tf.global_variables_initializer())
 
+        self.intialize()
+
+        self.sess.run(tf.global_variables_initializer())
+
+
         # self.saver = tf.train.Saver()
+
+    def intialize(self):
+        self.F_accum = []
+        for v in range(len(self.var_list)):
+            self.F_accum.append(np.zeros(self.var_list[v].get_shape().as_list()))
+        self.star_vars = []
+        for v in range(len(self.var_list)):
+            self.star_vars.append(self.var_list[v].eval())
+        ewc_penalty = 0
+        for v in range(len(self.var_list)):
+            ewc_penalty += (self.lam/2) * tf.reduce_sum(tf.multiply(self.F_accum[v].astype(np.float32),tf.square(self.var_list[v] - self.star_vars[v])))
+        self.loss = tf.losses.mean_squared_error(self.target, self.y) + ewc_penalty
+        self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss)
+
 
 
     def predict(self, state):
@@ -79,7 +98,6 @@ class Agent():
     def star(self):
         # used for saving optimal weights after most recent task training
         self.star_vars = []
-
         for v in range(len(self.var_list)):
             self.star_vars.append(self.var_list[v].eval())
 
@@ -114,9 +132,9 @@ class Agent():
     def compute_fisher(self, sample_batch_size):
         if len(self.memory) < sample_batch_size:
             return
-        self.F_accum = []
-        for v in range(len(self.var_list)):
-            self.F_accum.append(np.zeros(self.var_list[v].get_shape().as_list()))
+        # self.F_accum = []
+        # for v in range(len(self.var_list)):
+        #     self.F_accum.append(np.zeros(self.var_list[v].get_shape().as_list()))
             # print(self.var_list[v])
         probs = tf.nn.softmax(self.y)
         class_ind = tf.to_int32(tf.multinomial(tf.log(probs), 1)[0][0])
@@ -139,7 +157,7 @@ class Agent():
 class CartPole:
     def __init__(self):
         self.sample_batch_size = 100
-        self.episodes          = 200
+        self.episodes          = 300
         self.testno			   = 10
         self.fisher_sample_size = 20
         #enviornment 2 runs first
@@ -240,7 +258,7 @@ class CartPole:
                     index += 1
                     rew += reward
                 print("Episode {}# Score: {}".format(index_episode, rew))
-                self.agent.replay(self.sample_batch_size, 15)
+                self.agent.replay(self.sample_batch_size, self.fisher_sample_size)
 
             # play first task again
 
