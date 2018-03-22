@@ -30,7 +30,7 @@ class Agent():
         self.exploration_decay  = 0.995
         self.n_hidden1 			= 100
         self.n_hidden2			= 90
-        self.lam				= 30
+        self.lam				= 15
         self.sess               = tf.InteractiveSession()
 
         self.x = tf.placeholder(tf.float32, [None, state_size], name='features')
@@ -165,7 +165,7 @@ class Agent():
 class CartPole:
     def __init__(self):
         self.sample_batch_size = 100
-        self.episodes          = 200
+        self.episodes          = 150
         self.testno			   = 10
         self.fisher_sample_size = 20
         #enviornment 2 runs first
@@ -270,7 +270,7 @@ class CartPole:
                     index += 1
                     rew += reward
                 print("Episode {}# Score: {}".format(index_episode, rew))
-                self.agent.replay(self.sample_batch_size, self.fisher_sample_size)
+                self.agent.replay(self.sample_batch_size, 15)
 
             # play first task again
 
