@@ -30,7 +30,7 @@ class Agent():
         self.exploration_decay  = 0.995
         self.n_hidden1 			= 50
         self.n_hidden2			= 40
-        self.lam				= 500
+        self.lam				= 400
         self.sess               = tf.InteractiveSession()
 
 
@@ -150,7 +150,7 @@ class Game:
         self.testno			   = 10
         self.fisher_sample_size = 100
         #enviornment 2 runs first
-        self.env1              = gym.make('Acrobot-v1')
+        self.env1              = gym.make('LunarLander-v2')
         self.env2              = gym.make('CartPole-v0')
         self.env1_input        = self.env1.observation_space.shape[0]
         self.env2_input        = self.env2.observation_space.shape[0]
