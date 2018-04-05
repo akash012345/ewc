@@ -18,7 +18,7 @@ def bias_variable(shape, name):
     return tf.Variable(initial)
 
 class Agent():
-    def __init__(self, state_size, action_size):
+    def __init__(self, state_size, action_size ):
         self.save_model_path   = "./my-model.ckpt"
         self.state_size         = state_size
         self.action_size        = action_size
@@ -33,35 +33,37 @@ class Agent():
         self.lam				= 400
         self.sess               = tf.InteractiveSession()
 
+        
+        self.x = tf.placeholder(tf.float32, [None, state_size], name='features_X')
+        self.target = tf.placeholder(tf.float32, [None, action_size], name='output_Y')
 
-        self.x = tf.placeholder(tf.float32, [None, state_size], name='features')
-        self.target = tf.placeholder(tf.float32, [None, action_size], name='output')
-    	
-        w1 = weight_variable([state_size, self.n_hidden1], 'weight1')
-        b1 = bias_variable([self.n_hidden1], 'bias1')
+        with tf.name_scope("feed_forward"):
+            w1 = weight_variable([state_size, self.n_hidden1], 'weight1')
+            b1 = bias_variable([self.n_hidden1], 'bias1')
 
-        h1 = tf.nn.relu(tf.matmul(self.x, w1) + b1, name = "hidden1")
+            h1 = tf.nn.relu(tf.matmul(self.x, w1) + b1, name = "hidden1")
 
-        w2 = weight_variable([self.n_hidden1, self.n_hidden2], "weight2")
-        b2 = bias_variable([self.n_hidden2], "bias2")
+            w2 = weight_variable([self.n_hidden1, self.n_hidden2], "weight2")
+            b2 = bias_variable([self.n_hidden2], "bias2")
 
-        h2 = tf.nn.relu(tf.matmul(h1, w2) + b2, name = "hidden2")
+            h2 = tf.nn.relu(tf.matmul(h1, w2) + b2, name = "hidden2")
 
-        w3 = weight_variable([self.n_hidden2, self.action_size], "weight3")
-        b3 = bias_variable([self.action_size], "bias3")
-
-        self.y = tf.matmul(h2, w3) + b3
+            w3 = weight_variable([self.n_hidden2, self.action_size], "weight3")
+            b3 = bias_variable([self.action_size], "bias3")
+        with tf.name_scope("Output_Node"):
+            self.y = tf.matmul(h2, w3) + b3
 
         self.var_list = [w1, b1, w2, b2, w3, b3]
-
-        self.loss = tf.losses.mean_squared_error(self.target, self.y)
-        
-        self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss)
-        
+        with tf.name_scope("mean_squared_error"):
+            self.loss = tf.losses.mean_squared_error(self.target, self.y)
+        with tf.name_scope("Train"):
+            self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss)
+            
         self.sess.run(tf.global_variables_initializer())
 
         self.saver = tf.train.Saver()
-
+        writer = tf.summary.FileWriter("/tmp/fisher/3")
+        writer.add_graph(self.sess.graph)
 
 
     def restore(self, sess):
@@ -76,15 +78,17 @@ class Agent():
 
     def train(self, state, target, lam):
         # self.lam = lam
+        # with tf.name_scope("training"):
         self.sess.run(self.train_step, feed_dict={self.x : state, self.target : target})
     	
-    def update_ewc_penalty(self):
-        self.ewc_loss = self.loss
-        for v in range(len(self.var_list)):
-            self.ewc_loss+= (self.lam/2) * tf.reduce_sum(tf.multiply(self.F_accum[v].astype(np.float32),tf.square(self.var_list[v] - self.star_vars[v])))
-        # self.loss = tf.losses.mean_squared_error(self.target, self.y) + ewc_penalty
-        self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.ewc_loss)
-        self.sess.run(tf.global_variables_initializer())
+    def update_ewc_penalty(self, scope_name="ewc_penalty"):
+        with tf.name_scope(scope_name):
+            self.ewc_loss = self.loss
+            for v in range(len(self.var_list)):
+                self.ewc_loss+= (self.lam/2) * tf.reduce_sum(tf.multiply(self.F_accum[v].astype(np.float32),tf.square(self.var_list[v] - self.star_vars[v])))
+            # self.loss = tf.losses.mean_squared_error(self.target, self.y) + ewc_penalty
+            self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.ewc_loss)
+            self.sess.run(tf.global_variables_initializer())
 
     def star(self):
         # used for saving optimal weights after most recent task training
@@ -116,6 +120,8 @@ class Agent():
               target = reward + self.gamma * np.amax(self.predict(next_state)[0])
             target_f = self.predict(state)
             target_f[0][action] = target
+            # with tf.name_scope("train"):
+            
             self.train(state, target_f, lam)
         if self.exploration_rate > self.exploration_min:
             self.exploration_rate *= self.exploration_decay
@@ -126,7 +132,8 @@ class Agent():
         self.F_accum = []
         for v in range(len(self.var_list)):
             self.F_accum.append(np.zeros(self.var_list[v].get_shape().as_list()))
-        probs = tf.nn.softmax(self.y)
+        with tf.name_scope("softmax"):    
+            probs = tf.nn.softmax(self.y)
         class_ind = tf.to_int32(tf.multinomial(tf.log(probs), 1)[0][0])
 
         sample_batch = random.sample(self.memory, sample_batch_size)
@@ -145,12 +152,12 @@ class Agent():
 
 class Game:
     def __init__(self):
-        self.sample_batch_size = 100
-        self.episodes          = 300
-        self.testno			   = 10
+        self.sample_batch_size  = 100
+        self.episodes           = 300 
+        self.testno			    = 10
         self.fisher_sample_size = 100
         #enviornment 2 runs first
-        self.env1              = gym.make('LunarLander-v2')
+        self.env1              = gym.make('Acrobot-v1')
         self.env2              = gym.make('CartPole-v0')
         self.env1_input        = self.env1.observation_space.shape[0]
         self.env2_input        = self.env2.observation_space.shape[0]
@@ -159,7 +166,7 @@ class Game:
         self.env2_output       = self.env2.action_space.n
         self.output_size       = max(self.env1_output,self.env2_output)
         self.agent             = Agent(self.input_size, self.output_size)
-        self.render_activate    = False
+        self.render_activate   = False
         
 
     def run(self):
@@ -298,3 +305,4 @@ class Game:
 if __name__ == "__main__":
     game = Game()
     game.run()
+
