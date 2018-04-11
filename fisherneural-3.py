@@ -26,11 +26,12 @@ class Agent():
         self.learning_rate      = 0.001
         self.gamma              = 0.95
         self.exploration_rate   = 1.0
-        self.exploration_min    = 0.001
+        self.exploration_min    = 0.007
         self.exploration_decay  = 0.995
-        self.n_hidden1 			= 50
-        self.n_hidden2			= 40
-        self.lam				= 400
+        self.exploration_decay_start = 800
+        self.n_hidden1 			= 75
+        self.n_hidden2			= 60
+        self.lam				= 500
         self.sess               = tf.InteractiveSession()
 
         
@@ -40,7 +41,6 @@ class Agent():
         with tf.name_scope("feed_forward"):
             w1 = weight_variable([state_size, self.n_hidden1], 'weight1')
             b1 = bias_variable([self.n_hidden1], 'bias1')
-
             h1 = tf.nn.relu(tf.matmul(self.x, w1) + b1, name = "hidden1")
 
             w2 = weight_variable([self.n_hidden1, self.n_hidden2], "weight2")
@@ -58,12 +58,13 @@ class Agent():
             self.loss = tf.losses.mean_squared_error(self.target, self.y)
         with tf.name_scope("Train"):
             self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss)
-            
+            # self.train_step = tf.train.RMSPropOptimizer(learning_rate = self.learning_rate).minimize(self.loss)
+
         self.sess.run(tf.global_variables_initializer())
 
         self.saver = tf.train.Saver()
-        writer = tf.summary.FileWriter("/tmp/fisher/3")
-        writer.add_graph(self.sess.graph)
+        self.writer = tf.summary.FileWriter("/tmp/fisher/3")
+        self.writer.add_graph(self.sess.graph)
 
 
     def restore(self, sess):
@@ -76,19 +77,20 @@ class Agent():
     def predict(self, state):
         return self.sess.run(self.y, feed_dict={self.x : state})
 
-    def train(self, state, target, lam):
+    def train(self, state, target):
         # self.lam = lam
         # with tf.name_scope("training"):
         self.sess.run(self.train_step, feed_dict={self.x : state, self.target : target})
     	
     def update_ewc_penalty(self, scope_name="ewc_penalty"):
         with tf.name_scope(scope_name):
-            self.ewc_loss = self.loss
+            self.ewc_loss = tf.losses.mean_squared_error(self.target, self.y)
             for v in range(len(self.var_list)):
                 self.ewc_loss+= (self.lam/2) * tf.reduce_sum(tf.multiply(self.F_accum[v].astype(np.float32),tf.square(self.var_list[v] - self.star_vars[v])))
-            # self.loss = tf.losses.mean_squared_error(self.target, self.y) + ewc_penalty
             self.train_step = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.ewc_loss)
-            self.sess.run(tf.global_variables_initializer())
+            # self.ewc_train_step = tf.train.RMSPropOptimizer(learning_rate = self.learning_rate).minimize(self.ewc_loss)
+        self.sess.run(tf.global_variables_initializer())
+        # self.writer.add_graph(self.sess.graph)
 
     def star(self):
         # used for saving optimal weights after most recent task training
@@ -110,7 +112,7 @@ class Agent():
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
 
-    def replay(self, sample_batch_size, lam = 0):
+    def replay(self, sample_batch_size, index_episode):
         if len(self.memory) < sample_batch_size:
             return
         sample_batch = random.sample(self.memory, sample_batch_size)
@@ -122,8 +124,8 @@ class Agent():
             target_f[0][action] = target
             # with tf.name_scope("train"):
             
-            self.train(state, target_f, lam)
-        if self.exploration_rate > self.exploration_min:
+            self.train(state, target_f)
+        if self.exploration_rate > self.exploration_min and self.exploration_decay_start<index_episode:
             self.exploration_rate *= self.exploration_decay
 
     def compute_fisher(self, sample_batch_size):
@@ -134,7 +136,7 @@ class Agent():
             self.F_accum.append(np.zeros(self.var_list[v].get_shape().as_list()))
         with tf.name_scope("softmax"):    
             probs = tf.nn.softmax(self.y)
-        class_ind = tf.to_int32(tf.multinomial(tf.log(probs), 1)[0][0])
+            class_ind = tf.to_int32(tf.multinomial(tf.log(probs), 1)[0][0])
 
         sample_batch = random.sample(self.memory, sample_batch_size)
         for state, action, reward, next_state, done in sample_batch:
@@ -153,11 +155,12 @@ class Agent():
 class Game:
     def __init__(self):
         self.sample_batch_size  = 100
-        self.episodes           = 300 
-        self.testno			    = 10
+        self.episodes2          = 100 
+        self.episodes1          = 1000
+        self.testno			    = 5
         self.fisher_sample_size = 100
         #enviornment 2 runs first
-        self.env1              = gym.make('Acrobot-v1')
+        self.env1              = gym.make('LunarLander-v2')
         self.env2              = gym.make('CartPole-v0')
         self.env1_input        = self.env1.observation_space.shape[0]
         self.env2_input        = self.env2.observation_space.shape[0]
@@ -166,12 +169,12 @@ class Game:
         self.env2_output       = self.env2.action_space.n
         self.output_size       = max(self.env1_output,self.env2_output)
         self.agent             = Agent(self.input_size, self.output_size)
-        self.render_activate   = False
+        self.render_activate   = True
         
 
     def run(self):
         try:
-            for index_episode in range(self.episodes):
+            for index_episode in range(self.episodes2):
                 state = self.env2.reset()
                 N=self.input_size-self.env2.observation_space.shape[0]
                 state = np.pad(state, (0, N), 'constant')
@@ -194,15 +197,8 @@ class Game:
                     index += 1
                     rew += reward
                 print("Episode {}# Score: {}".format(index_episode, rew))
-                self.agent.replay(self.sample_batch_size, 0)
+                self.agent.replay(self.sample_batch_size, index_episode)
             
-
-            # calculate fisher information
-            self.agent.star()
-            print('Computing Fisher')
-            self.agent.compute_fisher(self.fisher_sample_size)
-            self.agent.update_ewc_penalty()  
-            self.agent.restore(self.agent.sess)
 
             print("Testing...")
             self.agent.exploration_rate = 0
@@ -232,15 +228,23 @@ class Game:
 
             self.avgreward1 = reward1/self.testno
 
-            # train second task
+            # calculate fisher information
+            # self.agent.star()
+            # print('Computing Fisher')
+            # self.agent.compute_fisher(self.fisher_sample_size)
+            # self.agent.update_ewc_penalty()  
+            # self.agent.restore(self.agent.sess)
 
-            
+
+
+            #  train second task
+
 
             print("Train 2...")
 
             self.agent.exploration_rate = 1
                         
-            for index_episode in range(self.episodes):
+            for index_episode in range(self.episodes1):
                 state = self.env1.reset()
                 N=self.input_size-self.env1.observation_space.shape[0]
                 state = np.pad(np.array(state), (0, N), 'constant')
@@ -263,7 +267,7 @@ class Game:
                     index += 1
                     rew += reward
                 print("Episode {}# Score: {}".format(index_episode, rew))
-                self.agent.replay(self.sample_batch_size, 15)
+                self.agent.replay(self.sample_batch_size, index_episode)
 
             # play first task again
 
@@ -298,7 +302,7 @@ class Game:
 
             print(self.avgreward1)
             print(self.avgreward2)
-                # self.agent.replay(self.sample_batch_size, True)
+            #     # self.agent.replay(self.sample_batch_size, True)
         finally:
             self.agent.save_model()
 

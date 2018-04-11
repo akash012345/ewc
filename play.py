@@ -16,32 +16,32 @@ def bias_variable(shape, name):
     return tf.Variable(initial)
 
 class Agent():
-    def __init__(self, state_size, action_size):
+    def __init__(self, state_size, action_size ):
         self.state_size         = state_size
         self.action_size        = action_size
-        self.n_hidden1 			= 50
-        self.n_hidden2			= 40
+        self.n_hidden1          = 70
+        self.n_hidden2          = 60
         self.sess               = tf.InteractiveSession()
 
-
-        self.x = tf.placeholder(tf.float32, [None, state_size], name='features')
-        self.target = tf.placeholder(tf.float32, [None, action_size], name='output')
-    	
-        w1 = weight_variable([state_size, self.n_hidden1], 'weight1')
-        b1 = bias_variable([self.n_hidden1], 'bias1')
-
-        h1 = tf.nn.relu(tf.matmul(self.x, w1) + b1, name = "hidden1")
-
-        w2 = weight_variable([self.n_hidden1, self.n_hidden2], "weight2")
-        b2 = bias_variable([self.n_hidden2], "bias2")
-
-        h2 = tf.nn.relu(tf.matmul(h1, w2) + b2, name = "hidden2")
-
-        w3 = weight_variable([self.n_hidden2, self.action_size], "weight3")
-        b3 = bias_variable([self.action_size], "bias3")
-
-        self.y = tf.matmul(h2, w3) + b3
         
+        self.x = tf.placeholder(tf.float32, [None, state_size], name='features_X')
+        self.target = tf.placeholder(tf.float32, [None, action_size], name='output_Y')
+
+        with tf.name_scope("feed_forward"):
+            w1 = weight_variable([state_size, self.n_hidden1], 'weight1')
+            b1 = bias_variable([self.n_hidden1], 'bias1')
+            h1 = tf.nn.relu(tf.matmul(self.x, w1) + b1, name = "hidden1")
+
+            w2 = weight_variable([self.n_hidden1, self.n_hidden2], "weight2")
+            b2 = bias_variable([self.n_hidden2], "bias2")
+
+            h2 = tf.nn.relu(tf.matmul(h1, w2) + b2, name = "hidden2")
+
+            w3 = weight_variable([self.n_hidden2, self.action_size], "weight3")
+            b3 = bias_variable([self.action_size], "bias3")
+        with tf.name_scope("Output_Node"):
+            self.y = tf.matmul(h2, w3) + b3
+
         self.sess.run(tf.global_variables_initializer())
 
         self.saver=tf.train.Saver()
@@ -56,7 +56,7 @@ class Agent():
 
 class Game:
     def __init__(self):
-        self.episodes          = 10
+        self.episodes          = 2
         self.env1              = gym.make('LunarLander-v2')
         self.env2              = gym.make('CartPole-v0')
         self.env1_input        = self.env1.observation_space.shape[0]
