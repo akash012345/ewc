@@ -229,11 +229,11 @@ class Game:
             self.avgreward1 = reward1/self.testno
 
             # calculate fisher information
-            # self.agent.star()
-            # print('Computing Fisher')
-            # self.agent.compute_fisher(self.fisher_sample_size)
-            # self.agent.update_ewc_penalty()  
-            # self.agent.restore(self.agent.sess)
+            self.agent.star()
+            print('Computing Fisher')
+            self.agent.compute_fisher(self.fisher_sample_size)
+            self.agent.update_ewc_penalty()  
+            self.agent.restore(self.agent.sess)
 
 
 
@@ -302,7 +302,6 @@ class Game:
 
             print(self.avgreward1)
             print(self.avgreward2)
-            #     # self.agent.replay(self.sample_batch_size, True)
         finally:
             self.agent.save_model()
 
